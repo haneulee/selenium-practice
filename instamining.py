@@ -1,3 +1,4 @@
+import csv
 import time
 from selenium import webdriver
 from selenium.webdriver import ActionChains
@@ -10,12 +11,17 @@ from webdriver_manager.chrome import ChromeDriverManager
 browser = webdriver.Chrome(ChromeDriverManager().install())
 counted_hashtags = []
 used_hashtags = []
-max_hashtags = 20
+max_hashtags = 10
+initial_hashtag = "dog"
 
 
 def wait_for(locator):
     return WebDriverWait(browser,
                          10).until(EC.presence_of_element_located(locator))
+
+
+def clean_hashtag(hashtag):
+    return hashtag[1:]
 
 
 def extract_data():
@@ -24,7 +30,7 @@ def extract_data():
     if post_count:
         post_count = int(post_count.text.replace(",", ""))
     if hashtag_name:
-        hashtag_name = hashtag_name.text[1:]
+        hashtag_name = clean_hashtag(hashtag_name.text)
     if hashtag_name and post_count:
         if hashtag_name not in used_hashtags:
             counted_hashtags.append((hashtag_name, post_count))
@@ -37,11 +43,15 @@ def get_related(target_url):
     hashtags = header.find_elements_by_class_name("AC7dP")
 
     for hashtag in hashtags:
-        ActionChains(browser).key_down(Keys.COMMAND).click(hashtag).perform()
+        hashtag_name = clean_hashtag(hashtag.text)
+        if hashtag_name not in used_hashtags:
+            ActionChains(browser).key_down(
+                Keys.COMMAND).click(hashtag).perform()
 
     for window in browser.window_handles:
         browser.switch_to.window(window)
         extract_data()
+        time.sleep(1)
 
     if len(used_hashtags) < max_hashtags:
         for window in browser.window_handles[0:-1]:
@@ -51,8 +61,14 @@ def get_related(target_url):
         get_related(browser.current_url)
 
 
-initial_hashtag = "dog"
 get_related(f"https://www.instagram.com/explore/tags/{initial_hashtag}")
 
+file = open(f"{initial_hashtag}-report.csv", "w")
+writer = csv.writer(file)
+writer.writerow(["Hashtag", "Post Count"])
+
+for hashtag in counted_hashtags:
+    writer.writerow(hashtag)
+
 # time.sleep(3)
-# browser.quit()
+browser.quit()
